@@ -3,9 +3,13 @@
   background-color: #ff0;
 }
 
-.plot {
+.plot-container svg,
+.plot-container canvas {
   position: absolute;
+  display: block;
+}
+
+.plot-container svg {
   width: 100%;
   height: 100%;
-  display: block;
 }
