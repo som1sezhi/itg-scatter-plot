@@ -17,3 +17,7 @@
 .plot-grid line {
   stroke: #e3e3e3;
 }
+
+.plot-overlay {
+  cursor: crosshair;
+}

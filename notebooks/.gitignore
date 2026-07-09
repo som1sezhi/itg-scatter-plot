@@ -1,0 +1,5 @@
+# Logs
+.venv/
+__pycache__
+packs/
+pack_archives/

@@ -8,13 +8,14 @@ import {
   useState,
 } from "react";
 import * as d3 from "d3";
+import type { DataPoint } from "../types";
 
-const N_POINTS = 1000;
-const POINTS = Array.from({ length: N_POINTS }, () => ({
-  x: Math.random(),
-  y: Math.random(),
-  z: Math.random(),
-}));
+// const N_POINTS = 1000;
+// const POINTS = Array.from({ length: N_POINTS }, () => ({
+//   x: Math.random(),
+//   y: Math.random(),
+//   z: Math.random(),
+// }));
 
 const MARGIN_TOP = 0;
 const MARGIN_BOTTOM = 0;
@@ -25,7 +26,11 @@ const POINT_RADIUS = 6;
 
 const TICK_PADDING = 8;
 
-function Plot() {
+const COLORS = Array.from({ length: 5 }, (_, i) =>
+  d3.interpolateRainbow(i / 5 + 0.05),
+);
+
+function Plot({ data }: { data: DataPoint[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gXAxisRef = useRef<SVGGElement>(null);
@@ -43,11 +48,11 @@ function Plot() {
   const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
 
   const xScale = useMemo(
-    () => d3.scaleLinear([0, 1], [0, innerWidth]),
+    () => d3.scaleLinear([0, 500], [0, innerWidth]),
     [innerWidth],
   );
   const yScale = useMemo(
-    () => d3.scaleLinear([0, 1], [innerHeight, 0]),
+    () => d3.scaleLog([1, 2000], [innerHeight, 0]),
     [innerHeight],
   );
   const xAxis = useMemo(
@@ -84,7 +89,7 @@ function Plot() {
       });
     const overlay = d3.select(overlayRef.current!);
     overlay.call(zoom);
-  }, []);
+  }, [innerHeight]);
 
   // render axes and grids
   useEffect(() => {
@@ -105,15 +110,15 @@ function Plot() {
 
       ctx.clearRect(0, 0, innerWidth, innerHeight);
 
-      ctx.fillStyle = "#f888";
-
       const rescaledX = transform.rescaleX(xScale);
       const rescaledY = transform.rescaleY(yScale);
 
+      ctx.globalAlpha = 0.5;
+
       //ctx.beginPath();
-      POINTS.forEach((p) => {
-        const px = rescaledX(p.x);
-        const py = rescaledY(p.y);
+      data.forEach((p) => {
+        const px = rescaledX(p.bpm);
+        const py = rescaledY(p.totalStream);
         if (
           px < -POINT_RADIUS ||
           px > innerWidth + POINT_RADIUS ||
@@ -121,6 +126,8 @@ function Plot() {
           py > innerHeight + POINT_RADIUS
         )
           return;
+
+        ctx.fillStyle = COLORS[p.meter % 5];
         //ctx.moveTo(px + POINT_RADIUS, py);
         ctx.beginPath();
         ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
@@ -128,7 +135,7 @@ function Plot() {
       });
       //ctx.fill();
     },
-    [innerWidth, innerHeight, xScale, yScale, transform],
+    [innerWidth, innerHeight, xScale, yScale, transform, data],
   );
 
   // get notified by resizing
@@ -211,6 +218,7 @@ function Plot() {
           width={width}
           height={height}
           fill="transparent"
+          className="plot-overlay"
         />
       </svg>
     </div>
