@@ -26,9 +26,10 @@ const POINT_RADIUS = 6;
 function Plot() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const gx = useRef<SVGGElement>(null);
-  const gy = useRef<SVGGElement>(null);
+  const gXAxisRef = useRef<SVGGElement>(null);
+  const gYAxisRef = useRef<SVGGElement>(null);
+  const gXGridRef = useRef<SVGGElement>(null);
+  const gYGridRef = useRef<SVGGElement>(null);
 
   const [plotSize, setPlotSize] = useState({ width: 0, height: 0 });
   const { width, height } = plotSize;
@@ -46,11 +47,23 @@ function Plot() {
   );
 
   useEffect(() => {
-    d3.select(gx.current!).call(d3.axisBottom(xScale));
-  }, [xScale]);
+    d3.select(gXAxisRef.current!).call(d3.axisBottom(xScale));
+    d3.select(gXGridRef.current!).call(
+      d3
+        .axisBottom(xScale)
+        .tickSize(-innerHeight)
+        .tickFormat(() => ""),
+    );
+  }, [xScale, innerHeight]);
   useEffect(() => {
-    d3.select(gy.current!).call(d3.axisLeft(yScale));
-  }, [yScale]);
+    d3.select(gYAxisRef.current!).call(d3.axisLeft(yScale));
+    d3.select(gYGridRef.current!).call(
+      d3
+        .axisLeft(yScale)
+        .tickSize(-innerWidth)
+        .tickFormat(() => ""),
+    );
+  }, [yScale, innerWidth]);
 
   const drawPlot = useCallback(
     (canvas: HTMLCanvasElement) => {
@@ -99,8 +112,7 @@ function Plot() {
     if (width === 0 || height === 0) return;
 
     const canvas = canvasRef.current;
-    const svg = svgRef.current;
-    if (!canvas || !svg) return;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
 
     // setting canvas width/height at the same place as setting the scale
@@ -118,16 +130,16 @@ function Plot() {
 
   return (
     <div ref={containerRef} className="plot-container">
-      <svg ref={svgRef} width={width} height={height}>
+      <svg width={width} height={height}>
         <g
-          ref={gx}
-          /* offset by half a pixel to prevent points from partially overlapping the axes */
-          transform={`translate(${MARGIN_LEFT}, ${height - MARGIN_BOTTOM + 0.5})`}
+          ref={gXGridRef}
+          className="plot-grid"
+          transform={`translate(${MARGIN_LEFT}, ${height - MARGIN_BOTTOM})`}
         />
         <g
-          ref={gy}
-          /* offset by half a pixel to prevent points from partially overlapping the axes */
-          transform={`translate(${MARGIN_LEFT - 0.5}, ${MARGIN_TOP})`}
+          ref={gYGridRef}
+          className="plot-grid"
+          transform={`translate(${MARGIN_LEFT}, ${MARGIN_TOP})`}
         />
       </svg>
       <canvas
@@ -139,6 +151,16 @@ function Plot() {
           height: innerHeight,
         }}
       ></canvas>
+      <svg width={width} height={height}>
+        <g
+          ref={gXAxisRef}
+          transform={`translate(${MARGIN_LEFT}, ${height - MARGIN_BOTTOM})`}
+        />
+        <g
+          ref={gYAxisRef}
+          transform={`translate(${MARGIN_LEFT}, ${MARGIN_TOP})`}
+        />
+      </svg>
     </div>
   );
 }
