@@ -16,12 +16,14 @@ const POINTS = Array.from({ length: N_POINTS }, () => ({
   z: Math.random(),
 }));
 
-const MARGIN_TOP = 20;
-const MARGIN_BOTTOM = 50;
-const MARGIN_LEFT = 60;
-const MARGIN_RIGHT = 20;
+const MARGIN_TOP = 0;
+const MARGIN_BOTTOM = 0;
+const MARGIN_LEFT = 0;
+const MARGIN_RIGHT = 0;
 
 const POINT_RADIUS = 6;
+
+const TICK_PADDING = 8;
 
 function Plot() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,21 +50,27 @@ function Plot() {
     () => d3.scaleLinear([0, 1], [innerHeight, 0]),
     [innerHeight],
   );
-  const xAxis = useMemo(() => d3.axisBottom(xScale), [xScale]);
-  const yAxis = useMemo(() => d3.axisLeft(yScale), [yScale]);
+  const xAxis = useMemo(
+    () => d3.axisTop(xScale).tickSize(0).tickPadding(TICK_PADDING),
+    [xScale],
+  );
+  const yAxis = useMemo(
+    () => d3.axisRight(yScale).tickSize(0).tickPadding(TICK_PADDING),
+    [yScale],
+  );
   const xGrid = useMemo(
     () =>
       d3
-        .axisBottom(xScale)
-        .tickSize(-innerHeight)
+        .axisTop(xScale)
+        .tickSize(innerHeight)
         .tickFormat(() => ""),
     [xScale, innerHeight],
   );
   const yGrid = useMemo(
     () =>
       d3
-        .axisLeft(yScale)
-        .tickSize(-innerWidth)
+        .axisRight(yScale)
+        .tickSize(innerWidth)
         .tickFormat(() => ""),
     [yScale, innerWidth],
   );
