@@ -30,12 +30,15 @@ function Plot() {
   const gYAxisRef = useRef<SVGGElement>(null);
   const gXGridRef = useRef<SVGGElement>(null);
   const gYGridRef = useRef<SVGGElement>(null);
+  const overlayRef = useRef<SVGRectElement>(null);
 
   const [plotSize, setPlotSize] = useState({ width: 0, height: 0 });
   const { width, height } = plotSize;
   const innerWidth = width - MARGIN_LEFT - MARGIN_RIGHT;
   const innerHeight = height - MARGIN_TOP - MARGIN_BOTTOM;
   const pixelRatio = window.devicePixelRatio ?? 1;
+
+  const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
 
   const xScale = useMemo(
     () => d3.scaleLinear([0, 1], [0, innerWidth]),
@@ -45,26 +48,49 @@ function Plot() {
     () => d3.scaleLinear([0, 1], [innerHeight, 0]),
     [innerHeight],
   );
-
-  useEffect(() => {
-    d3.select(gXAxisRef.current!).call(d3.axisBottom(xScale));
-    d3.select(gXGridRef.current!).call(
+  const xAxis = useMemo(() => d3.axisBottom(xScale), [xScale]);
+  const yAxis = useMemo(() => d3.axisLeft(yScale), [yScale]);
+  const xGrid = useMemo(
+    () =>
       d3
         .axisBottom(xScale)
         .tickSize(-innerHeight)
         .tickFormat(() => ""),
-    );
-  }, [xScale, innerHeight]);
-  useEffect(() => {
-    d3.select(gYAxisRef.current!).call(d3.axisLeft(yScale));
-    d3.select(gYGridRef.current!).call(
+    [xScale, innerHeight],
+  );
+  const yGrid = useMemo(
+    () =>
       d3
         .axisLeft(yScale)
         .tickSize(-innerWidth)
         .tickFormat(() => ""),
-    );
-  }, [yScale, innerWidth]);
+    [yScale, innerWidth],
+  );
 
+  // add zoom behavior
+  useEffect(() => {
+    const zoom = d3
+      .zoom<SVGRectElement, unknown>()
+      .on("zoom", ({ transform }) => {
+        setTransform(transform);
+      });
+    const overlay = d3.select(overlayRef.current!);
+    overlay.call(zoom);
+  }, []);
+
+  // render axes and grids
+  useEffect(() => {
+    const rescaledX = transform.rescaleX(xScale);
+    d3.select(gXAxisRef.current!).call(xAxis.scale(rescaledX));
+    d3.select(gXGridRef.current!).call(xGrid.scale(rescaledX));
+  }, [xAxis, xGrid, transform, xScale]);
+  useEffect(() => {
+    const rescaledY = transform.rescaleY(yScale);
+    d3.select(gYAxisRef.current!).call(yAxis.scale(rescaledY));
+    d3.select(gYGridRef.current!).call(yGrid.scale(rescaledY));
+  }, [yAxis, yGrid, transform, yScale]);
+
+  // render points on canvas
   const drawPlot = useCallback(
     (canvas: HTMLCanvasElement) => {
       const ctx = canvas.getContext("2d")!;
@@ -73,16 +99,28 @@ function Plot() {
 
       ctx.fillStyle = "#f888";
 
+      const rescaledX = transform.rescaleX(xScale);
+      const rescaledY = transform.rescaleY(yScale);
+
+      //ctx.beginPath();
       POINTS.forEach((p) => {
-        const px = xScale(p.x);
-        const py = yScale(p.y);
+        const px = rescaledX(p.x);
+        const py = rescaledY(p.y);
+        if (
+          px < -POINT_RADIUS ||
+          px > innerWidth + POINT_RADIUS ||
+          py < -POINT_RADIUS ||
+          py > innerHeight + POINT_RADIUS
+        )
+          return;
         //ctx.moveTo(px + POINT_RADIUS, py);
         ctx.beginPath();
         ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
       });
+      //ctx.fill();
     },
-    [innerWidth, innerHeight, xScale, yScale],
+    [innerWidth, innerHeight, xScale, yScale, transform],
   );
 
   // get notified by resizing
@@ -159,6 +197,12 @@ function Plot() {
         <g
           ref={gYAxisRef}
           transform={`translate(${MARGIN_LEFT}, ${MARGIN_TOP})`}
+        />
+        <rect
+          ref={overlayRef}
+          width={width}
+          height={height}
+          fill="transparent"
         />
       </svg>
     </div>
