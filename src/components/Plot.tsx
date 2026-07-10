@@ -22,7 +22,7 @@ const MARGIN_BOTTOM = 0;
 const MARGIN_LEFT = 0;
 const MARGIN_RIGHT = 0;
 
-const POINT_RADIUS = 10;
+const POINT_RADIUS = 8;
 
 const TICK_PADDING = 8;
 
@@ -63,15 +63,20 @@ function Plot({ data }: { data: DataPoint[] }) {
   );
 
   const xScale = useMemo(
-    () => d3.scaleLinear([0, 500], [0, innerWidth]),
+    () => d3.scaleLinear([75, 500], [0, innerWidth]),
     [innerWidth],
   );
   const yScale = useMemo(
-    () => d3.scaleLog([1, 2000], [innerHeight, 0]).base(2),
+    () => d3.scaleLog([8, 16384], [innerHeight, 0]).base(2),
     [innerHeight],
   );
   const xAxis = useMemo(
-    () => d3.axisTop(xScale).tickSize(0).tickPadding(TICK_PADDING),
+    () =>
+      d3
+        .axisTop(xScale)
+        .tickSize(0)
+        .tickPadding(TICK_PADDING)
+        .tickFormat(d3.format("~g")),
     [xScale],
   );
   const yAxis = useMemo(
@@ -109,6 +114,7 @@ function Plot({ data }: { data: DataPoint[] }) {
     [transform, yScale],
   );
 
+  // display tooltip when hovering over points
   const onMouseMove: React.MouseEventHandler<SVGRectElement> = useCallback(
     (event) => {
       const [mx, my] = d3.pointer(event);
@@ -125,8 +131,8 @@ function Plot({ data }: { data: DataPoint[] }) {
       const r2 = POINT_RADIUS * POINT_RADIUS;
       const newHoveredPoints: DataPoint[] = [];
       quadtree.visit((node, x1, y1, x2, y2) => {
+        // if this is leaf node
         if (node.length !== 4) {
-          // leaf node
           let leaf: d3.QuadtreeLeaf<DataPoint> | undefined = node;
           do {
             const d = leaf.data;
@@ -147,6 +153,8 @@ function Plot({ data }: { data: DataPoint[] }) {
         );
       });
 
+      newHoveredPoints.sort((a, b) => b.streamDensity - a.streamDensity);
+
       setHoveredPoints(newHoveredPoints);
       setHoverPos({ x: mx, y: my });
     },
@@ -161,14 +169,21 @@ function Plot({ data }: { data: DataPoint[] }) {
 
   // add zoom behavior
   useEffect(() => {
+    const leftExtent = xScale(0);
+    const bottomExtent = yScale(1);
     const zoom = d3
       .zoom<SVGRectElement, unknown>()
+      .translateExtent([
+        [leftExtent, -Infinity],
+        [Infinity, bottomExtent],
+      ])
+      .scaleExtent([0.5, 40])
       .on("zoom", ({ transform }) => {
         setTransform(transform);
       });
     const overlay = d3.select(overlayRef.current!);
     overlay.call(zoom);
-  }, [innerHeight]);
+  }, [innerWidth, innerHeight, xScale, yScale]);
 
   // render axes and grids
   useEffect(() => {
@@ -324,10 +339,24 @@ function PlotTooltip({
     >
       {hoveredPoints.map((p) => (
         <div key={p.hash}>
-          [{p.meter}] {p.name}
+          <span className="emphasis">
+            <span
+              style={{ color: COLORS[p.meter % 5], filter: "brightness(0.8)" }}
+            >
+              [{p.meter}]
+            </span>{" "}
+            [{Math.round(p.bpm)}]
+          </span>
+          {" " + p.name}
           <br />
-          &emsp;{Math.floor(p.totalStream)}m @{Math.round(p.bpm)},{" "}
-          {(p.streamDensity * 100).toFixed(0)}% density
+          <span className="muted">
+            &emsp;<span className="emphasis">{Math.floor(p.totalStream)}</span>{" "}
+            total,{" "}
+            <span className="emphasis">
+              {(p.streamDensity * 100).toFixed(0)}%
+            </span>{" "}
+            density
+          </span>
         </div>
       ))}
     </div>

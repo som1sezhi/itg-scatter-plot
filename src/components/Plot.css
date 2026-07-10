@@ -33,3 +33,12 @@
   font-size: 0.75rem;
   line-height: 1rem;
 }
+
+.plot-tooltip .emphasis {
+  color: #115;
+  font-weight: bold;
+}
+
+.plot-tooltip .muted {
+  color: #888;
+}

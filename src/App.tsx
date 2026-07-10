@@ -10,6 +10,10 @@ function App() {
     fetch("/dataset.json")
       .then((response) => response.json())
       .then((data: DataPoint[]) => {
+        data.forEach((d) => {
+          d.name = d.name.replace(/\[\d+\] ?\[\d+\] /, "");
+          d.name = d.name.replace(/Stamina RPG /, "SRPG");
+        });
         setData(data);
       });
   }, []);
