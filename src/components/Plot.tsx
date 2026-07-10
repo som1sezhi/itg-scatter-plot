@@ -22,7 +22,7 @@ const MARGIN_BOTTOM = 0;
 const MARGIN_LEFT = 0;
 const MARGIN_RIGHT = 0;
 
-const POINT_RADIUS = 6;
+const POINT_RADIUS = 10;
 
 const TICK_PADDING = 8;
 
@@ -45,14 +45,29 @@ function Plot({ data }: { data: DataPoint[] }) {
   const innerHeight = height - MARGIN_TOP - MARGIN_BOTTOM;
   const pixelRatio = window.devicePixelRatio ?? 1;
 
+  const [hoveredPoints, setHoveredPoints] = useState<DataPoint[]>([]);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+
   const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
+
+  const quadtree = useMemo(
+    () =>
+      d3
+        .quadtree<DataPoint>()
+        .x((d) => d.bpm)
+        .y((d) => Math.log2(d.totalStream))
+        .addAll(data),
+    [data],
+  );
 
   const xScale = useMemo(
     () => d3.scaleLinear([0, 500], [0, innerWidth]),
     [innerWidth],
   );
   const yScale = useMemo(
-    () => d3.scaleLog([1, 2000], [innerHeight, 0]),
+    () => d3.scaleLog([1, 2000], [innerHeight, 0]).base(2),
     [innerHeight],
   );
   const xAxis = useMemo(
@@ -60,7 +75,12 @@ function Plot({ data }: { data: DataPoint[] }) {
     [xScale],
   );
   const yAxis = useMemo(
-    () => d3.axisRight(yScale).tickSize(0).tickPadding(TICK_PADDING),
+    () =>
+      d3
+        .axisRight(yScale)
+        .tickSize(0)
+        .tickPadding(TICK_PADDING)
+        .tickFormat(d3.format("~g")),
     [yScale],
   );
   const xGrid = useMemo(
@@ -80,6 +100,65 @@ function Plot({ data }: { data: DataPoint[] }) {
     [yScale, innerWidth],
   );
 
+  const rescaledX = useMemo(
+    () => transform.rescaleX(xScale),
+    [transform, xScale],
+  );
+  const rescaledY = useMemo(
+    () => transform.rescaleY(yScale),
+    [transform, yScale],
+  );
+
+  const onMouseMove: React.MouseEventHandler<SVGRectElement> = useCallback(
+    (event) => {
+      const [mx, my] = d3.pointer(event);
+
+      const xQuery = rescaledX.invert(mx - MARGIN_LEFT);
+      const yQuery = Math.log2(rescaledY.invert(my - MARGIN_TOP));
+      const xPlusRadius = rescaledX.invert(mx - MARGIN_LEFT + POINT_RADIUS);
+      const yPlusRadius = Math.log2(
+        rescaledY.invert(my - MARGIN_TOP + POINT_RADIUS),
+      );
+      const xTolerance = Math.abs(xQuery - xPlusRadius);
+      const yTolerance = Math.abs(yQuery - yPlusRadius);
+
+      const r2 = POINT_RADIUS * POINT_RADIUS;
+      const newHoveredPoints: DataPoint[] = [];
+      quadtree.visit((node, x1, y1, x2, y2) => {
+        if (node.length !== 4) {
+          // leaf node
+          let leaf: d3.QuadtreeLeaf<DataPoint> | undefined = node;
+          do {
+            const d = leaf.data;
+            const screenX = rescaledX(d.bpm);
+            const screenY = rescaledY(d.totalStream);
+            const dx = screenX - mx;
+            const dy = screenY - my;
+            if (dx * dx + dy * dy < r2) {
+              newHoveredPoints.push(d);
+            }
+          } while ((leaf = leaf.next));
+        }
+        return (
+          x1 > xQuery + xTolerance ||
+          x2 < xQuery - xTolerance ||
+          y1 > yQuery + yTolerance ||
+          y2 < yQuery - yTolerance
+        );
+      });
+
+      setHoveredPoints(newHoveredPoints);
+      setHoverPos({ x: mx, y: my });
+    },
+    [rescaledX, rescaledY, quadtree],
+  );
+
+  const onMouseLeave: React.MouseEventHandler<SVGRectElement> =
+    useCallback(() => {
+      setHoveredPoints([]);
+      setHoverPos(null);
+    }, []);
+
   // add zoom behavior
   useEffect(() => {
     const zoom = d3
@@ -93,15 +172,13 @@ function Plot({ data }: { data: DataPoint[] }) {
 
   // render axes and grids
   useEffect(() => {
-    const rescaledX = transform.rescaleX(xScale);
     d3.select(gXAxisRef.current!).call(xAxis.scale(rescaledX));
     d3.select(gXGridRef.current!).call(xGrid.scale(rescaledX));
-  }, [xAxis, xGrid, transform, xScale]);
+  }, [xAxis, xGrid, rescaledX]);
   useEffect(() => {
-    const rescaledY = transform.rescaleY(yScale);
     d3.select(gYAxisRef.current!).call(yAxis.scale(rescaledY));
     d3.select(gYGridRef.current!).call(yGrid.scale(rescaledY));
-  }, [yAxis, yGrid, transform, yScale]);
+  }, [yAxis, yGrid, rescaledY]);
 
   // render points on canvas
   const drawPlot = useCallback(
@@ -109,9 +186,6 @@ function Plot({ data }: { data: DataPoint[] }) {
       const ctx = canvas.getContext("2d")!;
 
       ctx.clearRect(0, 0, innerWidth, innerHeight);
-
-      const rescaledX = transform.rescaleX(xScale);
-      const rescaledY = transform.rescaleY(yScale);
 
       ctx.globalAlpha = 0.5;
 
@@ -135,7 +209,7 @@ function Plot({ data }: { data: DataPoint[] }) {
       });
       //ctx.fill();
     },
-    [innerWidth, innerHeight, xScale, yScale, transform, data],
+    [innerWidth, innerHeight, rescaledX, rescaledY, data],
   );
 
   // get notified by resizing
@@ -219,10 +293,43 @@ function Plot({ data }: { data: DataPoint[] }) {
           height={height}
           fill="transparent"
           className="plot-overlay"
+          onMouseDown={onMouseMove} // for tap on mobile
+          onMouseMove={onMouseMove}
+          onMouseLeave={onMouseLeave}
         />
       </svg>
+      <PlotTooltip hoveredPoints={hoveredPoints} hoverPos={hoverPos} />
     </div>
   );
 }
 
 export default Plot;
+
+function PlotTooltip({
+  hoveredPoints,
+  hoverPos,
+}: {
+  hoveredPoints: DataPoint[];
+  hoverPos: { x: number; y: number } | null;
+}) {
+  if (!hoverPos || hoveredPoints.length === 0) return null;
+
+  return (
+    <div
+      className="plot-tooltip"
+      style={{
+        left: hoverPos.x + 3,
+        top: hoverPos.y + 3,
+      }}
+    >
+      {hoveredPoints.map((p) => (
+        <div key={p.hash}>
+          [{p.meter}] {p.name}
+          <br />
+          &emsp;{Math.floor(p.totalStream)}m @{Math.round(p.bpm)},{" "}
+          {(p.streamDensity * 100).toFixed(0)}% density
+        </div>
+      ))}
+    </div>
+  );
+}

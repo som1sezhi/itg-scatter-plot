@@ -1,6 +1,8 @@
 .plot-container {
   flex: 1 1;
   background-color: #fff;
+  overflow: hidden;
+  position: relative;
 }
 
 .plot-container svg,
@@ -20,4 +22,14 @@
 
 .plot-overlay {
   cursor: crosshair;
+}
+
+.plot-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
 }
