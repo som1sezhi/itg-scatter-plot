@@ -30,7 +30,15 @@ const COLORS = Array.from({ length: 5 }, (_, i) =>
   d3.interpolateRainbow(i / 5 + 0.05),
 );
 
-function Plot({ data }: { data: DataPoint[] }) {
+function Plot({
+  data,
+  densityMin,
+  densityMax,
+}: {
+  data: DataPoint[];
+  densityMin: number;
+  densityMax: number;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gXAxisRef = useRef<SVGGElement>(null);
@@ -58,8 +66,13 @@ function Plot({ data }: { data: DataPoint[] }) {
         .quadtree<DataPoint>()
         .x((d) => d.bpm)
         .y((d) => Math.log2(d.totalStream))
-        .addAll(data),
-    [data],
+        .addAll(
+          data.filter(
+            (d) =>
+              d.streamDensity >= densityMin && d.streamDensity <= densityMax,
+          ),
+        ),
+    [data, densityMin, densityMax],
   );
 
   const xScale = useMemo(
@@ -200,31 +213,60 @@ function Plot({ data }: { data: DataPoint[] }) {
     (canvas: HTMLCanvasElement) => {
       const ctx = canvas.getContext("2d")!;
 
-      ctx.clearRect(0, 0, innerWidth, innerHeight);
-
-      ctx.globalAlpha = 0.5;
-
-      //ctx.beginPath();
-      data.forEach((p) => {
-        const px = rescaledX(p.bpm);
-        const py = rescaledY(p.totalStream);
-        if (
+      function isOutOfView(px: number, py: number) {
+        return (
           px < -POINT_RADIUS ||
           px > innerWidth + POINT_RADIUS ||
           py < -POINT_RADIUS ||
           py > innerHeight + POINT_RADIUS
-        )
-          return;
+        );
+      }
 
-        ctx.fillStyle = COLORS[p.meter % 5];
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+
+      ctx.globalAlpha = 0.5;
+
+      const activePoints: DataPoint[] = [];
+
+      // draw inactive points first
+      ctx.fillStyle = "#ccc4";
+      data.forEach((p) => {
+        const px = rescaledX(p.bpm);
+        const py = rescaledY(p.totalStream);
+        if (isOutOfView(px, py)) return;
+
+        if (p.streamDensity >= densityMin && p.streamDensity <= densityMax) {
+          activePoints.push(p);
+          return;
+        }
+
         //ctx.moveTo(px + POINT_RADIUS, py);
         ctx.beginPath();
         ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
       });
-      //ctx.fill();
+
+      // draw active points on top
+      activePoints.forEach((p) => {
+        const px = rescaledX(p.bpm);
+        const py = rescaledY(p.totalStream);
+        ctx.fillStyle = COLORS[p.meter % 5];
+
+        //ctx.moveTo(px + POINT_RADIUS, py);
+        ctx.beginPath();
+        ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
+        ctx.fill();
+      });
     },
-    [innerWidth, innerHeight, rescaledX, rescaledY, data],
+    [
+      innerWidth,
+      innerHeight,
+      rescaledX,
+      rescaledY,
+      data,
+      densityMin,
+      densityMax,
+    ],
   );
 
   // get notified by resizing

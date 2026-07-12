@@ -1,3 +1,10 @@
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 1rem;
+  padding: 0.25rem 1rem;
+}
+
 /*.counter {
   font-size: 16px;
   padding: 5px 10px;
