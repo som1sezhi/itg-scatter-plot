@@ -71,15 +71,32 @@ function Plot({
     [data, densityMin, densityMax],
   );
 
-  const xScale = useMemo(
-    () => d3.scaleLinear([75, 500], [0, innerWidth]),
-    [innerWidth],
-  );
-  const yScale = useMemo(
-    () => d3.scaleLog([8, 16384], [innerHeight, 0]).base(2),
-    [innerHeight],
-  );
-  const xAxisTicks = innerWidth / innerHeight > 1.5 ? 16 : 10;
+  // fit the default view within a rectangle of [80, 500] bpm and
+  // [8, 16384] totalStream while keeping aspect ratio of data consistent
+  const aspectRatio = innerWidth / innerHeight;
+
+  const xScale = useMemo(() => {
+    if (aspectRatio >= 2) return d3.scaleLinear([80, 500], [0, innerWidth]);
+
+    const mid = 210; // focused around the "fuller" section of plot
+    const spread = (500 - 80) * (aspectRatio / 2);
+    const left = Math.max(80, mid - spread / 2);
+    return d3.scaleLinear([left, left + spread], [0, innerWidth]);
+  }, [innerWidth, aspectRatio]);
+
+  const yScale = useMemo(() => {
+    if (aspectRatio <= 2)
+      return d3.scaleLog([8, 16384], [innerHeight, 0]).base(2);
+
+    const mid = 8.5; // log2 of midpoint of 8 and 16384 (on log scale)
+    const spread = 5.5 / (aspectRatio / 2);
+    return d3
+      .scaleLog([2 ** (mid - spread), 2 ** (mid + spread)], [innerHeight, 0])
+      .base(2);
+  }, [innerHeight, aspectRatio]);
+
+  // axis/grid generators
+  const xAxisTicks = aspectRatio > 1.5 ? 16 : 10;
   const xAxis = useMemo(
     () =>
       d3
@@ -244,7 +261,7 @@ function Plot({
       const activePoints: DataPoint[] = [];
 
       // draw inactive points first
-      ctx.fillStyle = "#ccc4";
+      ctx.fillStyle = "#e3e3e399";
       data.forEach((p) => {
         const px = rescaledX(p.bpm);
         const py = rescaledY(p.totalStream);

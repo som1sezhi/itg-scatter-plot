@@ -6,7 +6,7 @@ import type { DataPoint } from "./types";
 function App() {
   const [data, setData] = useState<DataPoint[]>([]);
   const [densityCenter, setDensityCenter] = useState<number>(100);
-  const [densityRadius, setDensityRadius] = useState<number>(5);
+  const [densityRadius, setDensityRadius] = useState<number>(100);
 
   useEffect(() => {
     fetch("/dataset.json")
