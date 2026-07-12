@@ -53,11 +53,7 @@ function Plot({
   const innerHeight = height - MARGIN_TOP - MARGIN_BOTTOM;
   const pixelRatio = window.devicePixelRatio ?? 1;
 
-  const [hoveredPoints, setHoveredPoints] = useState<DataPoint[]>([]);
-  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(
-    null,
-  );
-
+  const [mousePos, setMousePos] = useState<[number, number] | null>(null);
   const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
 
   const quadtree = useMemo(
@@ -83,14 +79,16 @@ function Plot({
     () => d3.scaleLog([8, 16384], [innerHeight, 0]).base(2),
     [innerHeight],
   );
+  const xAxisTicks = innerWidth / innerHeight > 1.5 ? 16 : 10;
   const xAxis = useMemo(
     () =>
       d3
         .axisTop(xScale)
+        .ticks(xAxisTicks)
         .tickSize(0)
         .tickPadding(TICK_PADDING)
         .tickFormat(d3.format("~g")),
-    [xScale],
+    [xScale, xAxisTicks],
   );
   const yAxis = useMemo(
     () =>
@@ -105,9 +103,10 @@ function Plot({
     () =>
       d3
         .axisTop(xScale)
+        .ticks(xAxisTicks)
         .tickSize(innerHeight)
         .tickFormat(() => ""),
-    [xScale, innerHeight],
+    [xScale, innerHeight, xAxisTicks],
   );
   const yGrid = useMemo(
     () =>
@@ -127,57 +126,60 @@ function Plot({
     [transform, yScale],
   );
 
-  // display tooltip when hovering over points
+  const hoveredPoints = useMemo(() => {
+    if (!mousePos) return [];
+
+    const [mx, my] = mousePos;
+
+    const xQuery = rescaledX.invert(mx - MARGIN_LEFT);
+    const yQuery = Math.log2(rescaledY.invert(my - MARGIN_TOP));
+    const xPlusRadius = rescaledX.invert(mx - MARGIN_LEFT + POINT_RADIUS);
+    const yPlusRadius = Math.log2(
+      rescaledY.invert(my - MARGIN_TOP + POINT_RADIUS),
+    );
+    const xTolerance = Math.abs(xQuery - xPlusRadius);
+    const yTolerance = Math.abs(yQuery - yPlusRadius);
+
+    const r2 = POINT_RADIUS * POINT_RADIUS;
+    const newHoveredPoints: DataPoint[] = [];
+    quadtree.visit((node, x1, y1, x2, y2) => {
+      // if this is leaf node
+      if (node.length !== 4) {
+        let leaf: d3.QuadtreeLeaf<DataPoint> | undefined = node;
+        do {
+          const d = leaf.data;
+          const screenX = rescaledX(d.bpm);
+          const screenY = rescaledY(d.totalStream);
+          const dx = screenX - mx;
+          const dy = screenY - my;
+          if (dx * dx + dy * dy < r2) {
+            newHoveredPoints.push(d);
+          }
+        } while ((leaf = leaf.next));
+      }
+      return (
+        x1 > xQuery + xTolerance ||
+        x2 < xQuery - xTolerance ||
+        y1 > yQuery + yTolerance ||
+        y2 < yQuery - yTolerance
+      );
+    });
+
+    newHoveredPoints.sort((a, b) => b.streamDensity - a.streamDensity);
+
+    return newHoveredPoints;
+  }, [mousePos, rescaledX, rescaledY, quadtree]);
+
   const onMouseMove: React.MouseEventHandler<SVGRectElement> = useCallback(
     (event) => {
-      const [mx, my] = d3.pointer(event);
-
-      const xQuery = rescaledX.invert(mx - MARGIN_LEFT);
-      const yQuery = Math.log2(rescaledY.invert(my - MARGIN_TOP));
-      const xPlusRadius = rescaledX.invert(mx - MARGIN_LEFT + POINT_RADIUS);
-      const yPlusRadius = Math.log2(
-        rescaledY.invert(my - MARGIN_TOP + POINT_RADIUS),
-      );
-      const xTolerance = Math.abs(xQuery - xPlusRadius);
-      const yTolerance = Math.abs(yQuery - yPlusRadius);
-
-      const r2 = POINT_RADIUS * POINT_RADIUS;
-      const newHoveredPoints: DataPoint[] = [];
-      quadtree.visit((node, x1, y1, x2, y2) => {
-        // if this is leaf node
-        if (node.length !== 4) {
-          let leaf: d3.QuadtreeLeaf<DataPoint> | undefined = node;
-          do {
-            const d = leaf.data;
-            const screenX = rescaledX(d.bpm);
-            const screenY = rescaledY(d.totalStream);
-            const dx = screenX - mx;
-            const dy = screenY - my;
-            if (dx * dx + dy * dy < r2) {
-              newHoveredPoints.push(d);
-            }
-          } while ((leaf = leaf.next));
-        }
-        return (
-          x1 > xQuery + xTolerance ||
-          x2 < xQuery - xTolerance ||
-          y1 > yQuery + yTolerance ||
-          y2 < yQuery - yTolerance
-        );
-      });
-
-      newHoveredPoints.sort((a, b) => b.streamDensity - a.streamDensity);
-
-      setHoveredPoints(newHoveredPoints);
-      setHoverPos({ x: mx, y: my });
+      setMousePos(d3.pointer(event, overlayRef.current));
     },
-    [rescaledX, rescaledY, quadtree],
+    [],
   );
 
   const onMouseLeave: React.MouseEventHandler<SVGRectElement> =
     useCallback(() => {
-      setHoveredPoints([]);
-      setHoverPos(null);
+      setMousePos(null);
     }, []);
 
   // add zoom behavior
@@ -191,9 +193,22 @@ function Plot({
         [Infinity, bottomExtent],
       ])
       .scaleExtent([0.5, 40])
-      .on("zoom", ({ transform }) => {
-        setTransform(transform);
-      });
+      .on(
+        "zoom",
+        ({
+          transform,
+          sourceEvent,
+        }: d3.D3ZoomEvent<SVGRectElement, unknown>) => {
+          setTransform(transform);
+          if (sourceEvent.clientX !== undefined) {
+            setMousePos(d3.pointer(sourceEvent, overlayRef.current!));
+          } else {
+            // e.g. touch events don't have clientX/Y
+            // TODO: nicer handling
+            setMousePos(null);
+          }
+        },
+      );
     const overlay = d3.select(overlayRef.current!);
     overlay.call(zoom);
   }, [innerWidth, innerHeight, xScale, yScale]);
@@ -350,36 +365,52 @@ function Plot({
           height={height}
           fill="transparent"
           className="plot-overlay"
-          onMouseDown={onMouseMove} // for tap on mobile
           onMouseMove={onMouseMove}
           onMouseLeave={onMouseLeave}
         />
       </svg>
-      <PlotTooltip hoveredPoints={hoveredPoints} hoverPos={hoverPos} />
+      <PlotTooltip
+        hoveredPoints={hoveredPoints}
+        hoverPos={mousePos}
+        innerWidth={innerWidth}
+        innerHeight={innerHeight}
+      />
     </div>
   );
 }
 
 export default Plot;
 
+const MAX_TOOLTIP_CHARTS = 3;
+
 function PlotTooltip({
   hoveredPoints,
   hoverPos,
+  innerWidth,
+  innerHeight,
 }: {
   hoveredPoints: DataPoint[];
-  hoverPos: { x: number; y: number } | null;
+  hoverPos: [number, number] | null;
+  innerWidth: number;
+  innerHeight: number;
 }) {
   if (!hoverPos || hoveredPoints.length === 0) return null;
 
+  const style: React.CSSProperties = {};
+  if (hoverPos[0] < innerWidth / 2) {
+    style.left = hoverPos[0] + 3;
+  } else {
+    style.right = innerWidth - hoverPos[0] + 3;
+  }
+  if (hoverPos[1] < innerHeight / 2) {
+    style.top = hoverPos[1] + 3;
+  } else {
+    style.bottom = innerHeight - hoverPos[1] + 3;
+  }
+
   return (
-    <div
-      className="plot-tooltip"
-      style={{
-        left: hoverPos.x + 3,
-        top: hoverPos.y + 3,
-      }}
-    >
-      {hoveredPoints.map((p) => (
+    <div className="plot-tooltip" style={style}>
+      {hoveredPoints.slice(0, MAX_TOOLTIP_CHARTS).map((p) => (
         <div key={p.hash}>
           <span className="emphasis">
             <span
@@ -401,6 +432,13 @@ function PlotTooltip({
           </span>
         </div>
       ))}
+      {hoveredPoints.length > MAX_TOOLTIP_CHARTS && (
+        <div>
+          <b>
+            <i>+{hoveredPoints.length - MAX_TOOLTIP_CHARTS} more...</i>
+          </b>
+        </div>
+      )}
     </div>
   );
 }
