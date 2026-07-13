@@ -32,12 +32,10 @@ const COLORS = Array.from({ length: 5 }, (_, i) =>
 
 function Plot({
   data,
-  densityMin,
-  densityMax,
+  densityRange: [densityMin, densityMax],
 }: {
   data: DataPoint[];
-  densityMin: number;
-  densityMax: number;
+  densityRange: [number, number];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -370,10 +368,12 @@ function Plot({
       <svg width={width} height={height}>
         <g
           ref={gXAxisRef}
+          className="plot-axis"
           transform={`translate(${MARGIN_LEFT}, ${height - MARGIN_BOTTOM})`}
         />
         <g
           ref={gYAxisRef}
+          className="plot-axis"
           transform={`translate(${MARGIN_LEFT}, ${MARGIN_TOP})`}
         />
         <rect

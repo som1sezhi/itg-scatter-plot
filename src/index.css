@@ -1,16 +1,20 @@
 body {
   margin: 0;
-  font-family: "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
 }
 
 #root {
   width: 100svw;
   height: 100svh;
+  max-width: 100svw;
+  max-height: 100svh;
+  overflow: hidden;
 
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+
+  font-family: Roboto, sans-serif;
 }
 
 /*
