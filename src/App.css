@@ -1,5 +1,5 @@
 .separator {
-  background-color: #bbb;
+  background-color: #777;
   --separator-width: 4px;
 }
 
@@ -13,7 +13,7 @@
 
 .separator[data-separator="hover"],
 .separator[data-separator="active"] {
-  background-color: #666;
+  background-color: #555;
 }
 
 .separator[data-separator="focus"] {

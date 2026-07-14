@@ -30,11 +30,18 @@ const COLORS = Array.from({ length: 5 }, (_, i) =>
   d3.interpolateRainbow(i / 5 + 0.05),
 );
 
+function meterToColor(meter: number | null) {
+  if (meter === null) return "#111";
+  return COLORS[meter % 5];
+}
+
 function Plot({
   data,
+  customPoint,
   densityRange: [densityMin, densityMax],
 }: {
   data: DataPoint[];
+  customPoint: DataPoint | null;
   densityRange: [number, number];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -180,10 +187,32 @@ function Plot({
       );
     });
 
+    if (
+      customPoint &&
+      customPoint.streamDensity >= densityMin &&
+      customPoint.streamDensity <= densityMax
+    ) {
+      const screenX = rescaledX(customPoint.bpm);
+      const screenY = rescaledY(customPoint.totalStream);
+      const dx = screenX - mx;
+      const dy = screenY - my;
+      if (dx * dx + dy * dy < r2 * 1.25 * 1.25) {
+        newHoveredPoints.push(customPoint);
+      }
+    }
+
     newHoveredPoints.sort((a, b) => b.streamDensity - a.streamDensity);
 
     return newHoveredPoints;
-  }, [mousePos, rescaledX, rescaledY, quadtree]);
+  }, [
+    mousePos,
+    rescaledX,
+    rescaledY,
+    quadtree,
+    customPoint,
+    densityMin,
+    densityMax,
+  ]);
 
   const onMouseMove: React.MouseEventHandler<SVGRectElement> = useCallback(
     (event) => {
@@ -252,6 +281,35 @@ function Plot({
         );
       }
 
+      function drawCircle(x: number, y: number, rfac: number) {
+        ctx.beginPath();
+        ctx.arc(x, y, POINT_RADIUS * rfac, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      function drawCircleStroke(x: number, y: number, rfac: number) {
+        ctx.beginPath();
+        ctx.arc(x, y, POINT_RADIUS * rfac, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+
+      function drawCustomPoint(px: number, py: number, active: boolean) {
+        const mainCol = active ? "#111" : "#bbb";
+        ctx.fillStyle = mainCol;
+        ctx.globalAlpha = 0.9;
+
+        drawCircle(px, py, 0.75);
+
+        ctx.lineWidth = POINT_RADIUS * 0.25;
+        if (active) {
+          ctx.strokeStyle = "#fff7";
+          drawCircleStroke(px, py, 0.875);
+        }
+        ctx.strokeStyle = mainCol;
+        drawCircleStroke(px, py, 1.125);
+
+        ctx.globalAlpha = 0.5; // reset
+      }
+
       ctx.clearRect(0, 0, innerWidth, innerHeight);
 
       ctx.globalAlpha = 0.5;
@@ -271,22 +329,31 @@ function Plot({
         }
 
         //ctx.moveTo(px + POINT_RADIUS, py);
-        ctx.beginPath();
-        ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
-        ctx.fill();
+        drawCircle(px, py, 1);
       });
+      const customPointActive =
+        customPoint &&
+        customPoint.streamDensity >= densityMin &&
+        customPoint.streamDensity <= densityMax;
+      if (customPoint && !customPointActive) {
+        const px = rescaledX(customPoint.bpm);
+        const py = rescaledY(customPoint.totalStream);
+        drawCustomPoint(px, py, false);
+      }
 
       // draw active points on top
       activePoints.forEach((p) => {
         const px = rescaledX(p.bpm);
         const py = rescaledY(p.totalStream);
-        ctx.fillStyle = COLORS[p.meter % 5];
+        ctx.fillStyle = meterToColor(p.meter);
 
-        //ctx.moveTo(px + POINT_RADIUS, py);
-        ctx.beginPath();
-        ctx.arc(px, py, POINT_RADIUS, 0, 2 * Math.PI);
-        ctx.fill();
+        drawCircle(px, py, 1);
       });
+      if (customPoint && customPointActive) {
+        const px = rescaledX(customPoint.bpm);
+        const py = rescaledY(customPoint.totalStream);
+        drawCustomPoint(px, py, true);
+      }
     },
     [
       innerWidth,
@@ -296,6 +363,7 @@ function Plot({
       data,
       densityMin,
       densityMax,
+      customPoint,
     ],
   );
 
@@ -431,16 +499,21 @@ function PlotTooltip({
         <div key={p.hash}>
           <span className="emphasis">
             <span
-              style={{ color: COLORS[p.meter % 5], filter: "brightness(0.8)" }}
+              style={{
+                color: p.isCustom ? "#111" : meterToColor(p.meter),
+                filter: "brightness(0.8)",
+              }}
             >
-              [{p.meter}]
+              [{p.meter === null ? "??" : p.meter}]
             </span>{" "}
             [{Math.round(p.bpm)}]
-          </span>
-          {" " + p.name}
+          </span>{" "}
+          {p.isCustom ? <em>{p.name}</em> : p.name}
           <br />
           <span className="muted">
-            &emsp;<span className="emphasis">{Math.floor(p.totalStream)}</span>{" "}
+            &emsp;<span className="emphasis">
+              {Math.floor(p.totalStream)}
+            </span>{" "}
             total,{" "}
             <span className="emphasis">
               {(p.streamDensity * 100).toFixed(0)}%
