@@ -536,18 +536,23 @@ class ChartAnalyzer:
         quants = (32, 24, 20, 16, 12, 8, 4, 2, 1)
 
         # figure out what quant to use for the breakdown.
-        # similar to zmod, this will be the first of (32nds, 24ths, 20ths)
-        # whose total density (including breaks before/after all stream runs)
-        # is at least 10%, or 16ths if none of the previous quants' breakdowns
-        # were dense enough.
-        for q in quants:
-            total_stream = sum(run.len for run in stream_runs[q])
+        # this will be the first of (32nds, 24ths, 20ths) whose total density
+        # (including breaks before/after all stream runs) is at least 10%,
+        # or 16ths if none of the previous quants' breakdowns were dense enough,
+        # or even lower if there are no 16ths
+        q = 32
+        total_stream = sum(run.len for run in stream_runs[q])
+        for test_q in quants[1:]:
+            test_total_stream = sum(run.len for run in stream_runs[test_q])
+            # only use lower quant if significant improvement is found
+            # by doing so
+            if test_total_stream and total_stream / test_total_stream < 0.5:
+                q = test_q
+                total_stream = test_total_stream
             entire_chart_density = total_stream / num_measures
-            if entire_chart_density >= 0.1:
+            threshold = 0 if test_q == 16 else 0.1
+            if entire_chart_density >= threshold:
                 break
-        # since variables in python for loops persist after the loop ends,
-        # q and total_stream should now contain the correct values for the
-        # desired quant.
 
         # segments shall be a list of numeric values representing stream
         # and break segments (positive for stream, negative for break).

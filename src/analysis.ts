@@ -420,13 +420,21 @@ export class ChartAnalyzer {
       }
     }
 
-    let q: number = 0;
-    let totalStream = 0;
-    for (q of quants) {
-      totalStream = streamRuns[q].reduce((accum, run) => accum + run.len, 0);
+    let q = 32;
+    let totalStream = streamRuns[q].reduce((accum, run) => accum + run.len, 0);
+    for (const testQ of quants.slice(1)) {
+      const testTotalStream = streamRuns[testQ].reduce(
+        (accum, run) => accum + run.len,
+        0,
+      );
+      // only use lower quant if significant improvement is found
+      if (testTotalStream > 0 && totalStream / testTotalStream < 0.5) {
+        q = testQ;
+        totalStream = testTotalStream;
+      }
       const entireChartDensity = totalStream / numMeasures;
       // only consider going below 16ths if there's no 16th stream at all
-      const threshold = q === 16 ? 0 : 0.1;
+      const threshold = testQ === 16 ? 0 : 0.1;
       if (entireChartDensity > threshold) break;
     }
 
