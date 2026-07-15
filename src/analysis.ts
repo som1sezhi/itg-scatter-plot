@@ -150,6 +150,87 @@ export function runsToSegments(runs: StreamRun[], mult: number): number[] {
   return segs;
 }
 
+export function segmentsToDensityGraph(
+  segs: number[],
+  bpm: number,
+): [number, number][] {
+  function measuresToTime(measure: number) {
+    return (240 / bpm) * measure;
+  }
+  const nps = bpm / 15;
+
+  let curMeasure = 0;
+  let numDeferredNotes = 0;
+  const graph: [number, number][] = [];
+
+  function handleSegment(length: number, nps: number) {
+    const curMeasureFloor = Math.floor(curMeasure);
+    const segEnd = curMeasure + length;
+    const segEndFloor = Math.floor(segEnd);
+    // split into 3 parts (lengths are measured in measures):
+    // try to fill up the first (maybe fractional) unfinished measure
+    // as much as possible
+    const part1Len = Math.min(curMeasureFloor + 1, segEnd) - curMeasure;
+    const part1FillsMeasure = segEnd >= curMeasureFloor + 1;
+    // fill as many additional full measures as possible
+    const part2Len = Math.max(0, segEndFloor - (curMeasureFloor + 1));
+    // add fractional leftover
+    const part3Len = length - part1Len - part2Len;
+
+    // handle part 1
+    const part1Notes = measuresToTime(part1Len) * nps;
+    numDeferredNotes += part1Notes;
+    if (part1FillsMeasure) {
+      graph.push([
+        measuresToTime(curMeasureFloor),
+        numDeferredNotes / measuresToTime(1),
+      ]);
+      numDeferredNotes = 0;
+
+      if (part2Len > 0) {
+        graph.push([measuresToTime(curMeasureFloor + 1), nps]);
+        if (segEndFloor - 1 > curMeasureFloor + 1) {
+          graph.push([measuresToTime(segEndFloor - 1), nps]);
+        }
+      }
+
+      if (part3Len > 0) {
+        const part3Notes = measuresToTime(part3Len) * nps;
+        numDeferredNotes += part3Notes;
+      }
+    }
+
+    curMeasure = segEnd;
+  }
+
+  let prevSeg = -1;
+  for (const seg of segs) {
+    if (seg > 0) {
+      if (prevSeg > 0) {
+        // implied 1m break
+        handleSegment(1, 0);
+      }
+      // add stream
+      handleSegment(seg, nps);
+    } else {
+      // add break
+      handleSegment(-seg, 0);
+    }
+    prevSeg = seg;
+  }
+
+  if (numDeferredNotes > 0) {
+    graph.push([
+      measuresToTime(Math.floor(curMeasure)),
+      numDeferredNotes / measuresToTime(1),
+    ]);
+    curMeasure++;
+  }
+  graph.push([measuresToTime(Math.floor(curMeasure)), 0]);
+
+  return graph;
+}
+
 export function breakdownStringFull(segs: number[]): string {
   let parts = [];
   for (const seg of segs) {
@@ -219,7 +300,7 @@ function breakdownStringSimplified(
   return bdParts.join("");
 }
 
-const MAX_BD_SEGMENTS = 8;
+const MAX_BD_SEGMENTS = 9;
 export function breakdownString(segs: number[]): string {
   if (segs.length <= MAX_BD_SEGMENTS) {
     return breakdownStringFull(segs);

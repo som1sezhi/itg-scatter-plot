@@ -19,6 +19,7 @@ import {
   ChartAnalyzer,
   parseBreakdown,
   runsToSegments,
+  segmentsToDensityGraph,
 } from "../../analysis";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { Simfile } from "../../simfile/Simfile";
@@ -109,7 +110,7 @@ export default function AddAPoint({
         minBpm: bpm,
         maxBpm: bpm,
         segments: result.segments,
-        densityGraph: [], // TODO
+        densityGraph: segmentsToDensityGraph(result.segments, bpm),
         isCustom: true,
       });
       setHelperText(
