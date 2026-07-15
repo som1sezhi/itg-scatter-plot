@@ -504,6 +504,8 @@ function PlotTooltip({
       {hoveredPoints.slice(0, MAX_TOOLTIP_CHARTS).map((p) => {
         const color = p.isCustom ? "#111" : meterToColor(p.meter);
 
+        const bpmIsConstant = p.maxBpm - p.minBpm < 1;
+
         const hasDensityGraph = p.densityGraph.length > 0;
         let graph: ReactElement | null = null;
         if (hasDensityGraph) {
@@ -552,12 +554,19 @@ function PlotTooltip({
               >
                 [{p.meter === null ? "??" : p.meter}]
               </span>{" "}
-              [{Math.round(p.bpm)}]
+              [{Math.round(p.bpm)}
+              {!bpmIsConstant && "*"}]
             </span>{" "}
-            {p.isCustom ? <em>{p.name}</em> : p.name}
+            <span className={p.isCustom ? "custom-name" : ""}>{p.name}</span>
             {p.pack && <span className="muted">{" (" + p.pack + ")"}</span>}
             <br />
             <span className="muted">
+              {!bpmIsConstant && (
+                <>
+                  {`${Math.round(p.minBpm)}-${Math.round(p.maxBpm)} BPM`}
+                  <br />
+                </>
+              )}
               <span className="emphasis">{Math.floor(p.totalStream)}</span>{" "}
               total,{" "}
               <span className="emphasis">

@@ -47,6 +47,10 @@ path.domain {
   gap: 0.375rem;
 }
 
+.plot-tooltip .custom-name {
+  font-style: italic;
+}
+
 .plot-tooltip .emphasis {
   color: #115;
   font-weight: bold;

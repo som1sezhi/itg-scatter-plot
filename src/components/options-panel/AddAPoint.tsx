@@ -162,8 +162,8 @@ export default function AddAPoint({
       bpm: bpm,
       totalStream: stream,
       streamDensity: density,
-      minBpm: bpm, // TODO
-      maxBpm: bpm, // TODO
+      minBpm: info.bpms[0]!,
+      maxBpm: info.bpms[1]!,
       segments,
       densityGraph: analyzer.getDensityGraph(),
       isCustom: true,
