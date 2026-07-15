@@ -21,7 +21,7 @@ function App() {
   // const [dims, setDims] = useState<[number, number]>([0, 0]);
 
   useEffect(() => {
-    fetch("/dataset.json")
+    fetch("dataset.json")
       .then((response) => response.json())
       .then((data: DataPoint[]) => {
         data.forEach((d) => {
