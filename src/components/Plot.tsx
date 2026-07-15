@@ -6,16 +6,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactElement,
 } from "react";
 import * as d3 from "d3";
 import type { DataPoint } from "../types";
-
-// const N_POINTS = 1000;
-// const POINTS = Array.from({ length: N_POINTS }, () => ({
-//   x: Math.random(),
-//   y: Math.random(),
-//   z: Math.random(),
-// }));
+import { breakdownString } from "../analysis";
 
 const MARGIN_TOP = 0;
 const MARGIN_BOTTOM = 0;
@@ -467,6 +462,17 @@ function Plot({
 export default Plot;
 
 const MAX_TOOLTIP_CHARTS = 3;
+const GRAPH_WIDTH = 180;
+const GRAPH_HEIGHT = 40;
+
+function duration(seconds: number): string {
+  seconds = Math.round(seconds);
+  return (
+    Math.floor(seconds / 60).toString() +
+    ":" +
+    (seconds % 60).toString().padStart(2, "0")
+  );
+}
 
 function PlotTooltip({
   hoveredPoints,
@@ -495,33 +501,80 @@ function PlotTooltip({
 
   return (
     <div className="plot-tooltip" style={style}>
-      {hoveredPoints.slice(0, MAX_TOOLTIP_CHARTS).map((p) => (
-        <div key={p.hash}>
-          <span className="emphasis">
-            <span
-              style={{
-                color: p.isCustom ? "#111" : meterToColor(p.meter),
-                filter: "brightness(0.8)",
-              }}
-            >
-              [{p.meter === null ? "??" : p.meter}]
-            </span>{" "}
-            [{Math.round(p.bpm)}]
-          </span>{" "}
-          {p.isCustom ? <em>{p.name}</em> : p.name}
-          <br />
-          <span className="muted">
-            &emsp;<span className="emphasis">
-              {Math.floor(p.totalStream)}
-            </span>{" "}
-            total,{" "}
+      {hoveredPoints.slice(0, MAX_TOOLTIP_CHARTS).map((p) => {
+        const color = p.isCustom ? "#111" : meterToColor(p.meter);
+
+        const hasDensityGraph = p.densityGraph.length > 0;
+        let graph: ReactElement | null = null;
+        if (hasDensityGraph) {
+          const x = d3.scaleLinear(
+            [0, p.densityGraph.at(-1)![0]],
+            [0, GRAPH_WIDTH],
+          );
+          const y = d3.scaleLinear(
+            [0, d3.max(p.densityGraph, (d) => d[1]) ?? 0],
+            [GRAPH_HEIGHT, 0],
+          );
+          const area = d3
+            .area()
+            .x((d) => x(d[0]))
+            .y0(y(0))
+            .y1((d) => y(d[1]));
+          const pathData = area(p.densityGraph);
+          if (pathData)
+            graph = (
+              <div
+                className="graph-container"
+                style={{ width: GRAPH_WIDTH, height: GRAPH_HEIGHT }}
+              >
+                <svg width={GRAPH_WIDTH} height={GRAPH_HEIGHT}>
+                  <path fill={color} opacity={0.8} d={pathData} />
+                  <line
+                    x1={0}
+                    y1={GRAPH_HEIGHT}
+                    x2={GRAPH_WIDTH}
+                    y2={GRAPH_HEIGHT}
+                  />
+                  <line x1={0} y1={GRAPH_HEIGHT} x2={0} y2={0} />
+                </svg>
+              </div>
+            );
+        }
+
+        return (
+          <div key={p.hash} className="tooltip-entry">
             <span className="emphasis">
-              {(p.streamDensity * 100).toFixed(0)}%
+              <span
+                style={{
+                  color,
+                  filter: "brightness(0.8)",
+                }}
+              >
+                [{p.meter === null ? "??" : p.meter}]
+              </span>{" "}
+              [{Math.round(p.bpm)}]
             </span>{" "}
-            density
-          </span>
-        </div>
-      ))}
+            {p.isCustom ? <em>{p.name}</em> : p.name}
+            {p.pack && <span className="muted">{" (" + p.pack + ")"}</span>}
+            <br />
+            <span className="muted">
+              <span className="emphasis">{Math.floor(p.totalStream)}</span>{" "}
+              total,{" "}
+              <span className="emphasis">
+                {(p.streamDensity * 100).toFixed(0)}%
+              </span>{" "}
+              density
+              {hasDensityGraph && `, ${duration(p.densityGraph.at(-1)![0])}`}
+            </span>
+            {graph}
+            {p.segments.length > 0 && (
+              <div className="muted breakdown">
+                {breakdownString(p.segments)}
+              </div>
+            )}
+          </div>
+        );
+      })}
       {hoveredPoints.length > MAX_TOOLTIP_CHARTS && (
         <div>
           <b>

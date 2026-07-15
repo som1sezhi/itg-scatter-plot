@@ -3,7 +3,7 @@ import { NoteTypes, type Note } from "./simfile/Note";
 import type { Simfile } from "./simfile/Simfile";
 import { TimingData } from "./simfile/TimingData";
 import { TimingEngine } from "./simfile/TimingEngine";
-import { ROWS_PER_MEASURE } from "./simfile/utils";
+import { beatToRow, ROWS_PER_MEASURE } from "./simfile/utils";
 
 export type JumpsHandlingMode = "individual" | "jumps" | "brackets";
 
@@ -136,27 +136,104 @@ export function analyzeSegments(segments: number[]): {
   };
 }
 
-export function runsToSegments(runs: StreamRun[]): number[] {
+export function runsToSegments(runs: StreamRun[], mult: number): number[] {
   const segs = [];
   let prevRunEnd = 0;
   for (const run of runs) {
     if (segs.length > 0) {
-      const breakLen = run.start - prevRunEnd;
-      if (breakLen > 1) segs.push(-breakLen);
+      const breakLen = (run.start - prevRunEnd) * mult;
+      if (breakLen !== 1) segs.push(-breakLen);
     }
-    segs.push(run.len);
+    segs.push(run.len * mult);
     prevRunEnd = run.start + run.len;
   }
   return segs;
 }
 
-export function breakdownString(segs: number[]): string {
+export function breakdownStringFull(segs: number[]): string {
   let parts = [];
   for (const seg of segs) {
     if (seg > 0) parts.push(seg.toString());
-    else if (seg < -1) parts.push(`(${-seg})`);
+    else if (seg !== -1) parts.push(`(${-seg})`);
   }
   return parts.join(" ");
+}
+
+function breakdownStringSimplified(
+  segs: number[],
+  simplifyLevel: number,
+  maxBreakdownParts: number,
+): string | null {
+  const bdParts: string[] = [];
+  let accumStream = 0;
+  let isBroken = false;
+
+  function addPart(breakLen: number | null = null) {
+    let part = accumStream.toString();
+    if (isBroken) part += "*";
+    if (breakLen !== null) {
+      if (breakLen < 2) part += "'";
+      else if (breakLen < 5) part += "-";
+      else if (breakLen < 32) part += " / ";
+      else part += " | ";
+    }
+    bdParts.push(part);
+    accumStream = 0;
+    isBroken = false;
+  }
+
+  segs.forEach((seg, i) => {
+    if (bdParts.length >= maxBreakdownParts) {
+      return null;
+    }
+
+    // is stream?
+    if (seg > 0) {
+      // if prev seg was also stream, this indicates a 1m break
+      if (i > 0 && segs[i - 1] > 0) {
+        if (simplifyLevel === 1) {
+          addPart(1);
+        } else {
+          accumStream += 1;
+          isBroken = true;
+        }
+      }
+      // add current stream segment
+      accumStream += seg;
+    } else {
+      // is break
+      const breakLen = -seg;
+      if (simplifyLevel === 3 && breakLen < 5) {
+        accumStream += breakLen;
+        isBroken = true;
+      } else {
+        addPart(breakLen);
+      }
+    }
+  });
+
+  if (bdParts.length === maxBreakdownParts) return null;
+  // add remaining stream
+  addPart();
+
+  return bdParts.join("");
+}
+
+const MAX_BD_SEGMENTS = 8;
+export function breakdownString(segs: number[]): string {
+  if (segs.length <= MAX_BD_SEGMENTS) {
+    return breakdownStringFull(segs);
+  }
+  let bd: string | null = null;
+  for (let simplifyLevel = 1; simplifyLevel < 4; simplifyLevel++) {
+    bd = breakdownStringSimplified(segs, simplifyLevel, MAX_BD_SEGMENTS);
+    if (bd !== null) break;
+  }
+  if (bd === null) {
+    let total = segs.filter((s) => s > 0).reduce((accum, s) => accum + s, 0);
+    bd = total.toString() + " total";
+  }
+  return bd;
 }
 
 export class ChartAnalyzer {
@@ -307,7 +384,7 @@ export class ChartAnalyzer {
       startTime = endTime;
     }
 
-    const quants = [32, 24, 20, 16];
+    const quants = [32, 24, 20, 16, 12, 8, 4, 2, 1];
     const streamRuns: Record<number, StreamRun[]> = {};
     const minBpm: Record<number, number | null> = {};
     const maxBpm: Record<number, number | null> = {};
@@ -348,7 +425,9 @@ export class ChartAnalyzer {
     for (q of quants) {
       totalStream = streamRuns[q].reduce((accum, run) => accum + run.len, 0);
       const entireChartDensity = totalStream / numMeasures;
-      if (entireChartDensity >= 0.1) break;
+      // only consider going below 16ths if there's no 16th stream at all
+      const threshold = q === 16 ? 0 : 0.1;
+      if (entireChartDensity > threshold) break;
     }
 
     const runs = streamRuns[q];
@@ -367,6 +446,58 @@ export class ChartAnalyzer {
       bpms: [minBpm[q], maxBpm[q]],
       avgBpm: totalStream > 0 ? accumBpm[q] / totalStream : null,
     };
+  }
+
+  getDensityGraph(): [number, number][] {
+    // ported from itgdb
+    const npsData: [number, number][] = [];
+
+    function appendPoint(time: number, nps: number) {
+      // if last 2 points in graph have same nps,
+      // just move the 2nd one to current measure time
+      // (idea stolen from simply love's code)
+      if (
+        npsData.length >= 2 &&
+        Math.abs(nps - npsData[npsData.length - 1][1]) < 1e-9 &&
+        Math.abs(nps - npsData[npsData.length - 2][1]) < 1e-9
+      ) {
+        npsData[npsData.length - 1][0] = time;
+      } else {
+        npsData.push([time, nps]);
+      }
+    }
+
+    // get nps for each measure, assemble final graph data
+    const npmSeq = this.getNotesPerMeasure();
+    let startTime = this.engine.timeAt(0);
+    let deferredCount = 0; // count of notes not put in the graph yet
+    npmSeq.forEach((count, i) => {
+      const endBeat = (i + 1) * 4;
+      const endTime = this.engine.timeAt(beatToRow(endBeat));
+      const measureLen = endTime - startTime;
+
+      // if the measure is too short, defer calculating the nps until we
+      // accumulate more time from future measures
+      if (measureLen > 0.12) {
+        // calculate nps, including notes deferred from prev. skipped measures
+        const nps = (count + deferredCount) / measureLen;
+        deferredCount = 0;
+        appendPoint(startTime, nps);
+        startTime = endTime;
+      } else {
+        deferredCount += count;
+      }
+    });
+
+    // add 0 nps point right after last measure
+    const lastBeat = npmSeq.length * 4;
+    const lastTime = this.engine.timeAt(beatToRow(lastBeat));
+    appendPoint(lastTime, 0);
+
+    // ehh i don't feel like bothering to put another 0 nps point right
+    // at the end of the song
+
+    return npsData;
   }
 
   getDiffStr() {

@@ -2,6 +2,7 @@ import NumberField from "../NumberField";
 import {
   Box,
   Button,
+  Divider,
   MenuItem,
   Stack,
   styled,
@@ -14,7 +15,7 @@ import type { DataPoint } from "../../types";
 import { CommonSelect, NumberField0To100 } from "./common";
 import {
   analyzeSegments,
-  breakdownString,
+  breakdownStringFull,
   ChartAnalyzer,
   parseBreakdown,
   runsToSegments,
@@ -64,12 +65,16 @@ export default function AddAPoint({
     }
     return {
       name: "<custom data point>",
+      pack: "",
       hash: "",
       meter: null,
       bpm: bpm,
       totalStream: totalStream,
       streamDensity: density / 100,
+      minBpm: bpm,
+      maxBpm: bpm,
       segments: [],
+      densityGraph: [],
       isCustom: true,
     };
   }
@@ -91,19 +96,24 @@ export default function AddAPoint({
         return;
       }
 
-      const { totalStream, streamDensity } = analyzeSegments(result.segments);
+      let { totalStream, streamDensity } = analyzeSegments(result.segments);
+      streamDensity = Math.round(streamDensity * 10000) / 10000;
       updateDataPoint({
         name: "<custom data point>",
+        pack: "",
         hash: "",
         meter: null,
-        bpm: bpm,
+        bpm,
         totalStream,
         streamDensity,
+        minBpm: bpm,
+        maxBpm: bpm,
         segments: result.segments,
+        densityGraph: [], // TODO
         isCustom: true,
       });
       setHelperText(
-        `${totalStream} total, ${Math.round(streamDensity * 100)}% density`,
+        `${totalStream} total, ${(streamDensity * 100).toFixed(2)}% density`,
       );
 
       setBpm(bpm);
@@ -141,24 +151,31 @@ export default function AddAPoint({
     if (analyzer.chart.difficulty !== 4) {
       name += " (" + analyzer.getDiffStr() + ")";
     }
+
+    const segments = runsToSegments(info.runs, mult);
+
     updateDataPoint({
       name,
+      pack: "",
       hash: "",
       meter: analyzer.chart.meter,
       bpm: bpm,
       totalStream: stream,
       streamDensity: density,
-      segments: [],
+      minBpm: bpm, // TODO
+      maxBpm: bpm, // TODO
+      segments,
+      densityGraph: analyzer.getDensityGraph(),
       isCustom: true,
     });
     setHelperText(
-      `${bpm} BPM, ${stream} total, ${Math.round(density * 100)}% density`,
+      `${bpm} BPM, ${stream} total, ${(density * 100).toFixed(2)}% density`,
     );
 
     setBpm(bpm);
     setTotalStream(stream);
     setDensity(density * 100);
-    setBreakdown(breakdownString(runsToSegments(info.runs)));
+    setBreakdown(breakdownStringFull(segments));
     setBreakdownErr("");
   }
 
@@ -174,7 +191,7 @@ export default function AddAPoint({
       setSim(sim);
       const analyzers = sim.charts
         .filter((chart) => chart.stepsType === "dance-single")
-        .map((chart) => new ChartAnalyzer(sim, chart, "individual"));
+        .map((chart) => new ChartAnalyzer(sim, chart, "brackets"));
       setAnalyzers(analyzers);
       // NOTE: chartIdx might have a stale value here, but at least the
       // new value should never be invalid
@@ -225,116 +242,122 @@ export default function AddAPoint({
         <MenuItem value={"file"}>Simfile upload</MenuItem>
       </CommonSelect>
 
-      {scheme === "params" ? (
-        <Stack spacing={2}>
-          <NumberField
-            label="BPM"
-            size="small"
-            min={1}
-            step={1}
-            value={bpm}
-            format={{ useGrouping: false }}
-            onValueCommitted={(val) => {
-              setBpm(val);
-              updateDataPoint(fromThreeParams(val, totalStream, density));
-            }}
-          />
-          <NumberField
-            label="Total stream"
-            size="small"
-            min={1}
-            step={1}
-            value={totalStream}
-            format={{ useGrouping: false }}
-            onValueCommitted={(val) => {
-              setTotalStream(val);
-              updateDataPoint(fromThreeParams(bpm, val, density));
-            }}
-          />
-          <NumberField0To100
-            label="% density"
-            value={density}
-            onValueCommitted={(val) => {
-              setDensity(val);
-              updateDataPoint(fromThreeParams(bpm, totalStream, val));
-            }}
-          />
-        </Stack>
-      ) : scheme === "bd" ? (
-        <Stack spacing={2}>
-          <NumberField
-            label="BPM"
-            size="small"
-            min={1}
-            step={1}
-            value={bpm}
-            format={{ useGrouping: false }}
-            onValueCommitted={(val) => {
-              setBpm(val);
-              updateFromBreakdown(val, breakdown);
-            }}
-          />
-          <Stack spacing={1}>
-            <TextField
-              id="breakdown-input"
-              label="Full breakdown"
-              multiline
-              rows={3}
+      <Divider />
+
+      <Box sx={{ pt: 1 }}>
+        {scheme === "params" ? (
+          <Stack spacing={2}>
+            <NumberField
+              label="BPM"
               size="small"
-              value={breakdown}
-              placeholder="e.g. 32 (8) 23 7 (2) 1"
-              onChange={(e) => setBreakdown(e.target.value)}
-              onBlur={() => updateFromBreakdown(bpm, breakdown)}
-              error={breakdownErr !== ""}
-              helperText={breakdownErr}
+              min={1}
+              step={1}
+              value={bpm}
+              format={{ useGrouping: false }}
+              onValueCommitted={(val) => {
+                setBpm(val);
+                updateDataPoint(fromThreeParams(val, totalStream, density));
+              }}
             />
-            {helperText && (
-              <Box>
-                <Typography>{helperText}</Typography>
-              </Box>
-            )}
+            <NumberField
+              label="Total stream"
+              size="small"
+              min={1}
+              step={1}
+              value={totalStream}
+              format={{ useGrouping: false }}
+              onValueCommitted={(val) => {
+                setTotalStream(val);
+                updateDataPoint(fromThreeParams(bpm, val, density));
+              }}
+            />
+            <NumberField0To100
+              label="% density"
+              value={density}
+              onValueCommitted={(val) => {
+                setDensity(val);
+                updateDataPoint(fromThreeParams(bpm, totalStream, val));
+              }}
+            />
           </Stack>
-        </Stack>
-      ) : (
-        // scheme === "file"
-        <Stack spacing={2}>
-          <Button
-            component="label"
-            role={undefined}
-            variant="contained"
-            tabIndex={-1}
-            startIcon={<UploadFileIcon />}
-          >
-            Choose file
-            <VisuallyHiddenInput type="file" onChange={onFileChange} />
-          </Button>
-          {sim && (
-            <Stack spacing={0}>
-              <Box sx={{ pb: 2 }}>
-                <Typography>
-                  <b>{sim.title + (sim.subtitle ? " " + sim.subtitle : "")}</b>
-                </Typography>
-              </Box>
-              <CommonSelect
-                label="Chart"
-                value={chartIdx}
-                onChange={onChartChange}
-              >
-                {analyzers.map((analyzer, i) => (
-                  <MenuItem key={i} value={i}>
-                    {analyzer.getDiffStr()} {analyzer.chart.meter}
-                  </MenuItem>
-                ))}
-              </CommonSelect>
+        ) : scheme === "bd" ? (
+          <Stack spacing={2}>
+            <NumberField
+              label="BPM"
+              size="small"
+              min={1}
+              step={1}
+              value={bpm}
+              format={{ useGrouping: false }}
+              onValueCommitted={(val) => {
+                setBpm(val);
+                updateFromBreakdown(val, breakdown);
+              }}
+            />
+            <Stack spacing={1}>
+              <TextField
+                id="breakdown-input"
+                label="Full breakdown"
+                multiline
+                rows={3}
+                size="small"
+                value={breakdown}
+                placeholder="e.g. 32 (8) 23 7 (2) 1"
+                onChange={(e) => setBreakdown(e.target.value)}
+                onBlur={() => updateFromBreakdown(bpm, breakdown)}
+                error={breakdownErr !== ""}
+                helperText={breakdownErr}
+              />
               {helperText && (
                 <Box>
                   <Typography>{helperText}</Typography>
                 </Box>
               )}
             </Stack>
-          )}
-        </Stack>
-      )}
+          </Stack>
+        ) : (
+          // scheme === "file"
+          <Stack spacing={2}>
+            <Button
+              component="label"
+              role={undefined}
+              variant="contained"
+              tabIndex={-1}
+              startIcon={<UploadFileIcon />}
+            >
+              Choose file
+              <VisuallyHiddenInput type="file" onChange={onFileChange} />
+            </Button>
+            {sim && (
+              <Stack spacing={0}>
+                <Box sx={{ pb: 2 }}>
+                  <Typography>
+                    <b>
+                      {sim.title + (sim.subtitle ? " " + sim.subtitle : "")}
+                    </b>
+                  </Typography>
+                </Box>
+                <CommonSelect
+                  label="Chart"
+                  value={chartIdx}
+                  onChange={onChartChange}
+                >
+                  {analyzers.map((analyzer, i) => (
+                    <MenuItem key={i} value={i}>
+                      {analyzer.getDiffStr()} {analyzer.chart.meter}
+                    </MenuItem>
+                  ))}
+                </CommonSelect>
+                {helperText && (
+                  <Box>
+                    <Typography>{helperText}</Typography>
+                  </Box>
+                )}
+              </Stack>
+            )}
+          </Stack>
+        )}
+      </Box>
     </Stack>
   );
 }

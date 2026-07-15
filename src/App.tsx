@@ -3,7 +3,7 @@ import "./App.css";
 import Plot from "./components/Plot";
 import type { DataPoint } from "./types";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import { Stack, Paper } from "@mui/material";
+import { Stack, Paper, Typography } from "@mui/material";
 import AddAPoint from "./components/options-panel/AddAPoint";
 import StreamDensityFilter from "./components/options-panel/StreamDensityFilter";
 
@@ -23,7 +23,8 @@ function App() {
       .then((data: DataPoint[]) => {
         data.forEach((d) => {
           d.name = d.name.replace(/\[\d+\] ?\[\d+\] /, "");
-          d.name = d.name.replace(/Stamina RPG /, "SRPG");
+          d.pack = d.pack.replace(/Stamina RPG /, "SRPG");
+          d.pack = d.pack.replace(/ - [\w\s]+$/, "");
         });
         setData(data);
       });
@@ -70,6 +71,9 @@ function App() {
                 densityRange={densityRange}
                 updateDensity={setDensityRange}
               />
+            </Paper>
+            <Paper sx={{ p: 2 }} elevation={4}>
+              <Typography>{data.length} data points loaded</Typography>
             </Paper>
           </Stack>
         </div>

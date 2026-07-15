@@ -67,8 +67,8 @@ export default function StreamDensityFilter({
         </>
       ) : (
         <>
-          <Grid container spacing={2}>
-            <Grid size={8}>
+          <Grid container rowSpacing={2} columnSpacing={1}>
+            <Grid size={7}>
               <Slider0To1
                 value={(densityRange[0] + densityRange[1]) / 2}
                 onChange={(_, val) => {
@@ -80,7 +80,7 @@ export default function StreamDensityFilter({
                 }}
               />
             </Grid>
-            <Grid size={4}>
+            <Grid size={5}>
               <NumberField0To100
                 label="Center (%)"
                 value={(densityRange[0] + densityRange[1]) * 50}
@@ -93,7 +93,7 @@ export default function StreamDensityFilter({
                 }
               />
             </Grid>
-            <Grid size={8}>
+            <Grid size={7}>
               <Slider0To1
                 value={(densityRange[1] - densityRange[0]) / 2}
                 onChange={(_, val) => {
@@ -105,7 +105,7 @@ export default function StreamDensityFilter({
                 }}
               />
             </Grid>
-            <Grid size={4}>
+            <Grid size={5}>
               <NumberField0To100
                 label="Radius (%)"
                 value={(densityRange[1] - densityRange[0]) * 50}
