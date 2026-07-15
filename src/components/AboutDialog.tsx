@@ -46,19 +46,18 @@ export default function AboutDialog({
           </Typography>
           <Typography gutterBottom>
             The app allows you to compare your own chart with the charts on this
-            plot with using the "Add a point" section in the options panel. You
-            can either type in the chart's BPM/total stream/density, paste in
-            the full stream breakdown, or upload a simfile. Your chart will show
-            up in the chart as a black dot with a ring around it (unless it
-            falls outside the current density filter range, in which case it
-            will be greyed out).
+            plot using the "Add a point" section in the options panel. You can
+            either type in the chart's BPM/total stream/density, paste in the
+            full stream breakdown, or upload a simfile. Your chart will show up
+            in the chart as a black dot with a ring around it (unless it falls
+            outside the current density filter range, in which case it will be
+            greyed out).
           </Typography>
           <Typography gutterBottom>
-            The dataset currently consists of the SRPG6/7/8/9/10 base packs
-            (excluding DPRT), the ECS11/12/13/14 packs, the SRPG6 NNP unlocks,
-            and a few super long marathons. Some charts may be rerated in packs
-            that are not any of the above; those reratings are not reflected
-            here.
+            The dataset currently consists of the SRPG1-10 base packs (excluding
+            DPRT), the SRPG1-8 unlock packs (also excluding DPRT), and the
+            ECS11/12/13/14 packs. If a chart is rerated in a pack that is not
+            any of the above, the rerate will not be reflected here.
           </Typography>
           <Typography gutterBottom>
             The source code can be found{" "}
