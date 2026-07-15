@@ -62,13 +62,8 @@ function Plot({
         .quadtree<DataPoint>()
         .x((d) => d.bpm)
         .y((d) => Math.log2(d.totalStream))
-        .addAll(
-          data.filter(
-            (d) =>
-              d.streamDensity >= densityMin && d.streamDensity <= densityMax,
-          ),
-        ),
-    [data, densityMin, densityMax],
+        .addAll(data),
+    [data],
   );
 
   // fit the default view within a rectangle of [80, 500] bpm and
@@ -165,12 +160,14 @@ function Plot({
         let leaf: d3.QuadtreeLeaf<DataPoint> | undefined = node;
         do {
           const d = leaf.data;
-          const screenX = rescaledX(d.bpm);
-          const screenY = rescaledY(d.totalStream);
-          const dx = screenX - mx;
-          const dy = screenY - my;
-          if (dx * dx + dy * dy < r2) {
-            newHoveredPoints.push(d);
+          if (densityMin <= d.streamDensity && d.streamDensity <= densityMax) {
+            const screenX = rescaledX(d.bpm);
+            const screenY = rescaledY(d.totalStream);
+            const dx = screenX - mx;
+            const dy = screenY - my;
+            if (dx * dx + dy * dy < r2) {
+              newHoveredPoints.push(d);
+            }
           }
         } while ((leaf = leaf.next));
       }
