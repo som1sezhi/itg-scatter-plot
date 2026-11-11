@@ -551,7 +551,7 @@ class ChartAnalyzer:
                 total_stream = test_total_stream
             entire_chart_density = total_stream / num_measures
             threshold = 0 if test_q == 16 else 0.1
-            if entire_chart_density >= threshold:
+            if entire_chart_density > threshold:
                 break
 
         # segments shall be a list of numeric values representing stream
