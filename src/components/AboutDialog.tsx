@@ -55,7 +55,7 @@ export default function AboutDialog({
           </Typography>
           <Typography gutterBottom>
             The dataset currently consists of the SRPG1-10 base packs (excluding
-            DPRT), the SRPG1-8 unlock packs (also excluding DPRT), and the
+            DPRT), the SRPG1-9 unlock packs (also excluding DPRT), and the
             ECS11/12/13/14 packs. If a chart is rerated in a pack that is not
             any of the above, the rerate will not be reflected here.
           </Typography>
